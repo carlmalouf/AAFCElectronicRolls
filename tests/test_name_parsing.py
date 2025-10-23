@@ -19,11 +19,6 @@ class TestParseName:
         assert result['surname'] == "Johnson"
         assert result['firstname'] is None
         
-    def test_parse_name_invalid(self, sample_names):
-        """Test parsing invalid name format returns None"""
-        result = parse_name(sample_names['invalid'])
-        assert result is None
-        
     def test_parse_name_with_complex_firstname(self):
         """Test parsing name with complex firstname"""
         result = parse_name("CPL Smith-Jones (Mary Anne)")
@@ -37,3 +32,32 @@ class TestParseName:
         assert result['rank'] == "SGT"
         assert result['surname'] == "Smith"
         assert result['firstname'] == "John"
+        
+    def test_parse_name_without_rank(self):
+        """Test parsing name without rank - should default to UNKNOWN"""
+        result = parse_name("Smith")
+        assert result['rank'] == "UNKNOWN"
+        assert result['surname'] == "Smith"
+        assert result['firstname'] is None
+        assert result['original'] == "UNKNOWN Smith"
+        
+    def test_parse_name_without_rank_with_firstname(self):
+        """Test parsing name without rank but with firstname"""
+        result = parse_name("Smith (John)")
+        assert result['rank'] == "UNKNOWN"
+        assert result['surname'] == "Smith"
+        assert result['firstname'] == "John"
+        assert result['original'] == "UNKNOWN Smith (John)"
+        
+    def test_parse_name_invalid_rank(self):
+        """Test parsing name with invalid rank code"""
+        result = parse_name("XYZ Smith")
+        assert result['rank'] == "UNKNOWN"
+        assert result['surname'] == "XYZ Smith"
+        assert result['original'] == "UNKNOWN XYZ Smith"
+        
+    def test_parse_name_lowercase(self):
+        """Test parsing name that's all lowercase (no rank)"""
+        result = parse_name("john smith")
+        assert result['rank'] == "UNKNOWN"
+        assert result['surname'] == "john smith"

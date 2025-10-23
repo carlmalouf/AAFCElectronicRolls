@@ -4,66 +4,6 @@ from app import process_rolls_data, get_rank_priority
 class TestRollProcessing:
     """Tests for complete roll processing with test data"""
     
-    def test_debug_staff_extraction(self, test_df):
-        """Debug test to see what staff are being extracted"""
-        print(f"\n=== DATAFRAME STRUCTURE ===")
-        print(f"Total columns: {len(test_df.columns)}")
-        print(f"Total rows: {len(test_df)}")
-        print(f"Column names (all columns):")
-        for i in range(len(test_df.columns)):
-            print(f"  [{i}]: {test_df.columns[i]}")
-        
-        # Check first column (Completion Time)
-        if len(test_df.columns) > 0:
-            first_col = test_df.columns[0]
-            print(f"\nFirst column: {first_col}")
-            print(f"Sample values:\n{test_df[first_col].head(3)}")
-        
-        # Check data in columns 1 and 2 (should be Staff and Exec)
-        if len(test_df.columns) > 1:
-            col1 = test_df.columns[1]
-            print(f"\nColumn 1: {col1}")
-            print(f"Sample values:\n{test_df[col1].head(3)}")
-        
-        if len(test_df.columns) > 2:
-            col2 = test_df.columns[2]
-            print(f"\nColumn 2: {col2}")
-            print(f"Sample values:\n{test_df[col2].head(3)}")
-        
-        print(f"===========================\n")
-        
-        output_df, stats = process_rolls_data(test_df)
-        
-        print(f"\n=== PROCESSING RESULTS ===")
-        print(f"Output dataframe shape: {output_df.shape}")
-        print(f"Output columns: {output_df.columns.tolist()}")
-        
-        if len(output_df) == 0:
-            print("WARNING: Output dataframe is EMPTY!")
-            print(f"Statistics: {stats}")
-            assert False, "Output dataframe is empty - no names were extracted or parsed"
-        
-        staff_col_name = stats['staff_col_name']
-        exec_col_name = stats['exec_col_name']
-        staff_rows = output_df[output_df['Source Column'] == staff_col_name]
-        exec_rows = output_df[output_df['Source Column'] == exec_col_name]
-        
-        print(f"Staff column name (index 1): '{staff_col_name}'")
-        print(f"Exec column name (index 2): '{exec_col_name}'")
-        print(f"Staff count from stats: {stats['staff_count']}")
-        print(f"Staff section count: {stats['section_counts'].get(staff_col_name, 0)}")
-        print(f"\nStaff rows in output ({len(staff_rows)}):")
-        if len(staff_rows) > 0:
-            print(staff_rows[['Rank', 'Surname', 'Full Name']])
-        print(f"\nExec/Senior rows in output ({len(exec_rows)}):")
-        if len(exec_rows) > 0:
-            print(exec_rows[['Rank', 'Surname', 'Full Name']])
-        print(f"\nAll section counts: {stats['section_counts']}")
-        print(f"=================\n")
-        
-        # This will fail but show us the actual data
-        assert False, f"Debug: Staff column is '{staff_col_name}', Exec column is '{exec_col_name}'"
-    
     def test_staff_count(self, test_df):
         """Test that 7 staff members are counted"""
         output_df, stats = process_rolls_data(test_df)
