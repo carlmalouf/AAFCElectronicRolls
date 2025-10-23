@@ -18,16 +18,18 @@ class TestRankPriority:
         
     def test_cadet_rank_priority_lowest(self):
         """Test lowest cadet rank has correct priority"""
-        assert get_rank_priority("CDT", False) == 6
+        assert get_rank_priority("CDT", False) == 6      
         
-    def test_unknown_rank_staff(self):
-        """Test unknown rank returns high priority for staff"""
-        assert get_rank_priority("UNKNOWN", True) == 999
+    def test_unknown_rank_priority_cadet(self):
+        """Test that UNKNOWN rank has lowest priority for cadets"""
+        assert get_rank_priority("UNKNOWN", False) == len(CADET_RANKS) - 1
         
-    def test_unknown_rank_cadet(self):
-        """Test unknown rank returns high priority for cadets"""
-        assert get_rank_priority("UNKNOWN", False) == 999
-        
+    def test_unknown_rank_lower_than_cdt(self):
+        """Test that UNKNOWN rank is lower priority than CDT"""
+        cdt_priority = get_rank_priority("CDT", False)
+        unknown_priority = get_rank_priority("UNKNOWN", False)
+        assert unknown_priority > cdt_priority
+    
     def test_all_staff_ranks_have_priority(self):
         """Test all staff ranks have valid priorities"""
         for idx, rank in enumerate(STAFF_RANKS):

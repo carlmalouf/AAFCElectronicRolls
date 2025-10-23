@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # Rank order definitions
-CADET_RANKS = ["CUO", "CWOFF", "CFSGT", "CSGT", "CCPL", "LCDT", "CDT"]
+CADET_RANKS = ["CUO", "CWOFF", "CFSGT", "CSGT", "CCPL", "LCDT", "CDT", "UNKNOWN"]
 STAFF_RANKS = ["SQNLDR", "FLTLT", "FLGOFF", "PLTOFF", "WOFF", "FSGT", "SGT", "CPL", "LACW", "LAC", "ACW", "AC", "CIV"]
 
 # Hardcoded column order for K:U (indices 10-20 in original Excel)
@@ -33,17 +33,52 @@ COLUMN_ORDER = [
 def parse_name(name_str: str) -> Dict[str, str]:
     """
     Parse a name string in format 'RANK Surname (Firstname)' or 'RANK Surname'.
+    If no rank is found, treats the string as surname only with rank 'UNKNOWN'.
     Returns a dict with rank, surname, and optional firstname.
     """
     name_str = name_str.strip()
     
     # Extract rank (all caps at the beginning)
     rank_match = re.match(r'^([A-Z]+)\s+(.+)$', name_str)
+    
     if not rank_match:
-        return None
+        # No rank found - treat entire string as surname with UNKNOWN rank
+        # Check if there's a firstname in brackets
+        if '(' in name_str and ')' in name_str:
+            parts = name_str.split('(')
+            surname = parts[0].strip()
+            firstname = parts[1].replace(')', '').strip()
+        else:
+            surname = name_str
+            firstname = None
+        
+        return {
+            'rank': 'UNKNOWN',
+            'surname': surname,
+            'firstname': firstname,
+            'original': f"UNKNOWN {name_str}"
+        }
     
     rank = rank_match.group(1)
     remainder = rank_match.group(2)
+    
+    # Check if the rank is actually a valid rank, otherwise treat as surname
+    if rank not in STAFF_RANKS and rank not in CADET_RANKS[:-1]:  # Exclude UNKNOWN from check
+        # The "rank" is probably part of the surname
+        if '(' in name_str and ')' in name_str:
+            parts = name_str.split('(')
+            surname = parts[0].strip()
+            firstname = parts[1].replace(')', '').strip()
+        else:
+            surname = name_str
+            firstname = None
+        
+        return {
+            'rank': 'UNKNOWN',
+            'surname': surname,
+            'firstname': firstname,
+            'original': f"UNKNOWN {name_str}"
+        }
     
     # Extract surname and optional firstname
     firstname = None
