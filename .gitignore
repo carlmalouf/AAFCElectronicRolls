@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Pytest cache
+.pytest_cache/
+*.cover
+.coverage
+htmlcov/
+
+# Streamlit cache
+.streamlit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test data (keep structure, ignore actual files if sensitive)
+tests/test_data/*.xlsx
+tests/test_data/*.xls
+!tests/test_data/.gitkeep
+
+# Output files
+*.csv
+*.log
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
