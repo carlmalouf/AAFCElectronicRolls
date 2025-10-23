@@ -277,6 +277,11 @@ def main():
             with st.spinner("Processing rolls data..."):
                 output_df, stats = process_rolls_data(df)
             
+            # Check for UNKNOWN records and display warning
+            unknown_count = len(output_df[output_df['Rank'] == 'UNKNOWN'])
+            if unknown_count > 0:
+                st.warning(f"⚠️ Warning: Found {unknown_count} record(s) with UNKNOWN rank. These records may need to be reviewed and corrected.")
+            
             # Display statistics in tiles
             st.markdown("---")
             st.subheader("📊 Statistics")
