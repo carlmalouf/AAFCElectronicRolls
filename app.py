@@ -386,10 +386,14 @@ def main():
             output_df.to_csv(csv_buffer, index=False)
             csv_data = csv_buffer.getvalue()
             
+            # Generate filename based on selected date
+            date_str = selected_date.strftime("%Y%m%d")
+            csv_filename = f"{date_str} Formatted Rolls.csv"
+            
             st.download_button(
                 label="⬇️ Download Formatted CSV",
                 data=csv_data,
-                file_name="aafc_formatted_rolls.csv",
+                file_name=csv_filename,
                 mime="text/csv",
                 use_container_width=True
             )
