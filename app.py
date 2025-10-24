@@ -273,9 +273,47 @@ def main():
             
             st.success(f"File uploaded successfully! Found {len(df)} rows.")
             
+            # Extract unique dates from the dataframe
+            unique_dates = df[completion_time_col].dropna().unique()
+            unique_dates = pd.to_datetime(unique_dates).date
+            unique_dates = sorted(unique_dates, reverse=True)  # Most recent first
+            
+            if len(unique_dates) == 0:
+                st.error("No valid dates found in the uploaded file.")
+                return
+            
+            # Date selector
+            st.markdown("---")
+            st.subheader("📅 Select Target Date")
+            
+            # Convert dates to datetime for the date_input widget
+            default_date = unique_dates[0]
+            
+            selected_date = st.date_input(
+                "Select the date to process",
+                value=default_date,
+                min_value=min(unique_dates),
+                max_value=max(unique_dates),
+                help="Only records matching this date will be processed"
+            )
+            
+            # Filter dataframe by selected date
+            df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.date
+            df_filtered = df[df[completion_time_col] == selected_date].copy()
+            
+            if len(df_filtered) == 0:
+                st.warning(f"No records found for the selected date: {selected_date}")
+                st.info(f"Available dates in file: {', '.join(str(d) for d in unique_dates)}")
+                return
+            
+            # Convert back to datetime for consistency
+            df_filtered[completion_time_col] = pd.to_datetime(df_filtered[completion_time_col])
+            
+            st.info(f"Processing {len(df_filtered)} record(s) from {selected_date}")
+            
             # Process the data
             with st.spinner("Processing rolls data..."):
-                output_df, stats = process_rolls_data(df)
+                output_df, stats = process_rolls_data(df_filtered)
             
             # Check for UNKNOWN records and display warning
             unknown_count = len(output_df[output_df['Rank'] == 'UNKNOWN'])
@@ -364,15 +402,16 @@ def main():
         st.info("""
         ### Instructions
         1. Upload an Excel file (.xlsx or .xls) with AAFC roll data
-        2. The file should contain columns L-U with personnel names
-        3. Names should be in format: "RANK Surname (Firstname)" or "RANK Surname"
-        4. The app will:
-           - Extract and deduplicate all names
+        2. Select the target date to process from the available dates in the file
+        3. The file should contain columns L-U with personnel names
+        4. Names should be in format: "RANK Surname (Firstname)" or "RANK Surname"
+        5. The app will:
+           - Filter records to only include the selected date
            - Extract and deduplicate all names
            - Sort by Staff, Executives & Seniors, then others
            - Within each group, sort by rank (highest first) then surname
            - Display statistics and section breakdowns
-           - Allow download of formatted CSVrs, then others
+           - Allow download of formatted CSV
         """)
 
 if __name__ == "__main__":
