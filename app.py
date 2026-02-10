@@ -81,7 +81,13 @@ def parse_name(name_str: str) -> Dict[str, str]:
         surname = parts[0].strip()
         firstname = parts[1].replace(')', '').strip()
     else:
-        surname = remainder.strip()
+        # No brackets - assume "Firstname Lastname" format
+        name_parts = remainder.strip().split()
+        if len(name_parts) >= 2:
+            surname = name_parts[-1]
+            firstname = ' '.join(name_parts[:-1])
+        else:
+            surname = remainder.strip()
     
     return {
         'rank': rank,
