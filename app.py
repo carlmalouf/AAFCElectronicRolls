@@ -246,35 +246,36 @@ def main():
             # Determine file type and read
             file_type = uploaded_file.name.split('.')[-1].lower()
             
-            # Columns to keep: Completion Time (index 2) + Attendance columns (indices 8-11)
+            # Columns to keep: Today's Date (index 6) + Attendance columns (indices 8-11)
+            # 6: Today's Date: (the actual parade date, not Completion time which is when the form was submitted)
             # 8: Staff and Executive
             # 9: 1 Flight In Attendance
             # 10: 2 Flight In Attendance
             # 11: Zulu Flight In Attendance
-            columns_to_keep = [2, 8, 9, 10, 11]
+            columns_to_keep = [6, 8, 9, 10, 11]
             
             if file_type == 'csv':
                 df = pd.read_csv(uploaded_file, usecols=columns_to_keep)
             else:
                 df = pd.read_excel(uploaded_file, usecols=columns_to_keep)
             
-            # Standardize Completion Time to date only (remove time component)
+            # Standardize Today's Date to date only
             if len(df.columns) > 0:
-                # First column should be Completion Time (originally column C / index 2)
-                completion_time_col = df.columns[0]
-                if pd.api.types.is_datetime64_any_dtype(df[completion_time_col]):
-                    df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.normalize()
+                # First column should be Today's Date (the parade date)
+                date_col = df.columns[0]
+                if pd.api.types.is_datetime64_any_dtype(df[date_col]):
+                    df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
                 else:
                     # Try to convert to datetime if not already
                     try:
-                        df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.normalize()
+                        df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
                     except:
                         pass  # If conversion fails, leave as is
             
             st.success(f"File uploaded successfully! Found {len(df)} rows.")
             
             # Extract unique dates from the dataframe
-            unique_dates = df[completion_time_col].dropna().unique()
+            unique_dates = df[date_col].dropna().unique()
             unique_dates = pd.to_datetime(unique_dates).date
             unique_dates = sorted(unique_dates, reverse=True)  # Most recent first
             
@@ -298,8 +299,8 @@ def main():
             )
             
             # Filter dataframe by selected date
-            df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.date
-            df_filtered = df[df[completion_time_col] == selected_date].copy()
+            df[date_col] = pd.to_datetime(df[date_col]).dt.date
+            df_filtered = df[df[date_col] == selected_date].copy()
             
             if len(df_filtered) == 0:
                 st.warning(f"No records found for the selected date: {selected_date}")
@@ -307,7 +308,7 @@ def main():
                 return
             
             # Convert back to datetime for consistency
-            df_filtered[completion_time_col] = pd.to_datetime(df_filtered[completion_time_col])
+            df_filtered[date_col] = pd.to_datetime(df_filtered[date_col])
             
             st.info(f"Processing {len(df_filtered)} record(s) from {selected_date}")
             

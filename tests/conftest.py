@@ -21,14 +21,14 @@ def test_df(test_data_path):
     columns_to_keep = [2] + list(range(10, 21))
     df = pd.read_excel(test_data_path, usecols=columns_to_keep)
     
-    # Standardize Completion Time to date only
+    # Standardize date column to date only
     if len(df.columns) > 0:
-        completion_time_col = df.columns[0]
-        if pd.api.types.is_datetime64_any_dtype(df[completion_time_col]):
-            df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.normalize()
+        date_col = df.columns[0]
+        if pd.api.types.is_datetime64_any_dtype(df[date_col]):
+            df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
         else:
             try:
-                df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.normalize()
+                df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
             except:
                 pass
     
