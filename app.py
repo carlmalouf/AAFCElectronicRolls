@@ -31,8 +31,8 @@ def parse_name(name_str: str) -> Dict[str, str]:
     """
     name_str = name_str.strip()
     
-    # Extract rank (all caps at the beginning)
-    rank_match = re.match(r'^([A-Z]+)\s+(.+)$', name_str)
+    # Extract rank (all caps at the beginning), handling optional (AAFC) suffix
+    rank_match = re.match(r'^([A-Z]+)(?:\(AAFC\))?\s+(.+)$', name_str)
     
     if not rank_match:
         # No rank found - treat entire string as surname with UNKNOWN rank

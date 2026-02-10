@@ -61,3 +61,18 @@ class TestParseName:
         result = parse_name("john smith")
         assert result['rank'] == "UNKNOWN"
         assert result['surname'] == "john smith"
+
+    def test_parse_name_with_aafc_postfix(self):
+        """Test parsing rank with (AAFC) postfix"""
+        result = parse_name("CPL(AAFC) Smith (John)")
+        assert result['rank'] == "CPL"
+        assert result['surname'] == "Smith"
+        assert result['firstname'] == "John"
+
+    def test_parse_name_with_aafc_postfix_no_firstname(self):
+        """Test parsing rank with (AAFC) postfix and no firstname"""
+        result = parse_name("SQNLDR(AAFC) Jones")
+        assert result['rank'] == "SQNLDR"
+        assert result['surname'] == "Jones"
+        assert result['firstname'] is None
+
