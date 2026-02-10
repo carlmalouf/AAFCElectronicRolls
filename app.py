@@ -15,19 +15,12 @@ st.set_page_config(
 CADET_RANKS = ["CUO", "CWOFF", "CFSGT", "CSGT", "CCPL", "LCDT", "CDT", "UNKNOWN"]
 STAFF_RANKS = ["SQNLDR", "FLTLT", "FLGOFF", "PLTOFF", "WOFF", "FSGT", "SGT", "CPL", "LACW", "LAC", "ACW", "AC", "CIV"]
 
-# Hardcoded column order for K:U (indices 10-20 in original Excel)
+# Hardcoded column order for updated input format
 COLUMN_ORDER = [
-    "Staff",
-    "Executives & Seniors",
-    "Alpha 1",
-    "Bravo 1",
-    "Charlie 1",
-    "Delta 1",
-    "Alpha 2",
-    "Bravo 2",
-    "Charlie 2",
-    "Delta 2",
-    "Zulu"
+    "Staff and Executive",
+    "1 Flight In Attendance",
+    "2 Flight In Attendance",
+    "Zulu Flight In Attendance"
 ]
 
 def parse_name(name_str: str) -> Dict[str, str]:
@@ -132,17 +125,20 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     Process the rolls data: extract names, sort them, and collect statistics.
     Returns (sorted_df, statistics_dict).
     """
-    # After import: Completion Time (index 0), then columns K-U (indices 1-11)
+    # After import: Completion Time (index 0), then columns defined in COLUMN_ORDER
     all_names = []
     section_counts = {}
     
     # Rename columns to match hardcoded order
-    # First column is Completion Time, remaining columns are K-U
-    new_columns = [df.columns[0]] + COLUMN_ORDER[:len(df.columns)-1]
-    df.columns = new_columns
+    # First column is Completion Time, remaining columns follow COLUMN_ORDER
+    # We expect the input df to have the completion time + the data columns in order
+    available_cols = min(len(df.columns) - 1, len(COLUMN_ORDER))
+    new_columns = [df.columns[0]] + COLUMN_ORDER[:available_cols]
     
-    # Get actual column names
-    col_names = df.columns.tolist()
+    # If df has more columns than we expected, keep their original names or drop them?
+    # The slicing [:available_cols] handles matching the count.
+    # We assign these names to the first N columns
+    df.columns.values[:len(new_columns)] = new_columns
     
     # Process each row - extract from columns 1 onwards (skipping Completion Time at index 0)
     for idx, row in df.iterrows():
@@ -150,13 +146,12 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
         all_names.extend(extracted)
     
     # Remove duplicates while preserving source column info
-    # Use a dict to track first occurrence of each name
     unique_names = {}
     for name, source_col in all_names:
         if name not in unique_names:
             unique_names[name] = source_col
     
-    # Count by section (including Staff and Executives & Seniors)
+    # Count by section
     for name, source_col in all_names:
         if source_col not in section_counts:
             section_counts[source_col] = set()
@@ -165,17 +160,13 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     # Convert counts to integers
     section_counts = {k: len(v) for k, v in section_counts.items()}
     
-    # Hardcoded column names
-    staff_col_name = "Staff"
-    exec_col_name = "Executives & Seniors"
-    
-    # Ensure Staff and Executives & Seniors are in section counts
-    if staff_col_name not in section_counts:
-        section_counts[staff_col_name] = 0
-    if exec_col_name not in section_counts:
-        section_counts[exec_col_name] = 0
-    
-    # Parse and categorize names
+    # Names of interest
+    staff_exec_col_name = "Staff and Executive"
+    flight1_col_name = "1 Flight In Attendance"
+    flight2_col_name = "2 Flight In Attendance"
+    zulu_col_name = "Zulu Flight In Attendance"
+
+    # Parsed lists
     staff_names = []
     exec_senior_names = []
     other_names = []
@@ -187,11 +178,13 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
             
         parsed['source_column'] = source_col
         
-        # Use actual column names for comparison
-        if source_col == staff_col_name:
-            staff_names.append(parsed)
-        elif source_col == exec_col_name:
-            exec_senior_names.append(parsed)
+        # Categorize
+        if source_col == staff_exec_col_name:
+            # Split into Staff and Executives based on rank
+            if parsed['rank'] in STAFF_RANKS:
+                staff_names.append(parsed)
+            else:
+                exec_senior_names.append(parsed)
         else:
             other_names.append(parsed)
     
@@ -200,7 +193,7 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     exec_senior_names.sort(key=lambda x: (get_rank_priority(x['rank'], False), x['surname']))
     other_names.sort(key=lambda x: (get_rank_priority(x['rank'], False), x['surname']))
     
-    # Combine all names in order
+    # Combine all names in order: Staff -> Execs -> Flights (Others)
     sorted_names = staff_names + exec_senior_names + other_names
     
     # Create output dataframe
@@ -221,12 +214,11 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     cadet_count = len(exec_senior_names) + len(other_names)
     total_count = len(sorted_names)
     
-    # Calculate Flight totals
-    flight1_count = sum(count for col, count in section_counts.items() 
-                       if '1' in col and col not in [staff_col_name, exec_col_name])
-    flight2_count = sum(count for col, count in section_counts.items() 
-                       if '2' in col and col not in [staff_col_name, exec_col_name])
-    zulu_count = section_counts.get('Zulu', 0)
+    # Calculate Flight totals from section_counts keys matches
+    flight1_count = section_counts.get(flight1_col_name, 0)
+    flight2_count = section_counts.get(flight2_col_name, 0)
+    zulu_count = section_counts.get(zulu_col_name, 0)
+    exec_count = len(exec_senior_names)  # Count of cadets in Staff column
     
     statistics = {
         'staff_count': staff_count,
@@ -236,31 +228,39 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
         'flight1_count': flight1_count,
         'flight2_count': flight2_count,
         'zulu_count': zulu_count,
-        'staff_col_name': staff_col_name,  # For display purposes
-        'exec_col_name': exec_col_name
+        'exec_count': exec_count,
+        'staff_col_name': staff_exec_col_name
     }
     
     return output_df, statistics
 
 def main():
     st.title("📋 AAFC Electronic Rolls")
-    st.markdown("Upload your AAFC rolls file (Excel format) to process and format the attendance data.")
+    st.markdown("Upload your AAFC rolls file (Excel or CSV format) to process and format the attendance data.")
     
     # File uploader
-    uploaded_file = st.file_uploader("Choose an Excel file", type=['xlsx', 'xls'])
+    uploaded_file = st.file_uploader("Choose a file", type=['xlsx', 'xls', 'csv'])
     
     if uploaded_file is not None:
         try:
-            # Keep column C (index 2), discard A-B (0-1) and D-J (3-9)
-            # Keep columns K-U (indices 10-20) - exactly 11 section columns
-            columns_to_keep = [2] + list(range(10, 21))  # C + K through U
+            # Determine file type and read
+            file_type = uploaded_file.name.split('.')[-1].lower()
             
-            # Read the Excel file with selected columns
-            df = pd.read_excel(uploaded_file, usecols=columns_to_keep)
+            # Columns to keep: Completion Time (index 2) + Attendance columns (indices 8-11)
+            # 8: Staff and Executive
+            # 9: 1 Flight In Attendance
+            # 10: 2 Flight In Attendance
+            # 11: Zulu Flight In Attendance
+            columns_to_keep = [2, 8, 9, 10, 11]
+            
+            if file_type == 'csv':
+                df = pd.read_csv(uploaded_file, usecols=columns_to_keep)
+            else:
+                df = pd.read_excel(uploaded_file, usecols=columns_to_keep)
             
             # Standardize Completion Time to date only (remove time component)
             if len(df.columns) > 0:
-                # First column should be Completion Time (originally column C)
+                # First column should be Completion Time (originally column C / index 2)
                 completion_time_col = df.columns[0]
                 if pd.api.types.is_datetime64_any_dtype(df[completion_time_col]):
                     df[completion_time_col] = pd.to_datetime(df[completion_time_col]).dt.normalize()
@@ -337,13 +337,11 @@ def main():
             st.markdown("### Staff & Leadership")
             col4, col5 = st.columns(2)
             with col4:
-                staff_col_name = stats.get('staff_col_name', 'Staff')
-                staff_sec_count = stats['section_counts'].get(staff_col_name, 0)
-                st.metric("👨‍✈️ Staff", staff_sec_count)
+                # Staff count is now from our parsed/categorized list, not just a column count
+                st.metric("👨‍✈️ Staff", stats['staff_count'])
             with col5:
-                exec_col_name = stats.get('exec_col_name', 'Executives & Seniors')
-                exec_count = stats['section_counts'].get(exec_col_name, 0)
-                st.metric("⭐ Executives & Seniors", exec_count)
+                # Executives are those with cadet ranks in the Staff/Executive column
+                st.metric("⭐ Executives & Seniors", stats.get('exec_count', 0))
             
             # Flight totals
             st.markdown("### Flight Totals")
@@ -355,25 +353,8 @@ def main():
             with col8:
                 st.metric("🎯 Zulu", stats.get('zulu_count', 0))
             
-            # Section breakdown
-            st.markdown("### Section Breakdown")
-            
-            # Get all sections excluding Staff and Exec/Seniors
-            staff_col_name = stats.get('staff_col_name', 'Staff')
-            exec_col_name = stats.get('exec_col_name', 'Executives & Seniors')
-            sections = sorted([k for k in stats['section_counts'].keys() 
-                             if k not in [staff_col_name, exec_col_name]])
-            
-            # Display sections in 4 columns (will wrap to multiple rows if needed)
-            section_cols = st.columns(4)
-            for idx, section in enumerate(sections):
-                with section_cols[idx % 4]:
-                    st.metric(f"📍 {section}", stats['section_counts'][section])
-            
             # Display Zulu separately if it exists and wasn't already shown
-            if 'Zulu' in stats['section_counts'] and 'Zulu' in sections:
-                # Already displayed above, no need to show separately
-                pass
+            # Not needed as we have a metric for it above
             
             # Display the processed data
             st.markdown("---")
@@ -405,14 +386,14 @@ def main():
         # Show instructions
         st.info("""
         ### Instructions
-        1. Upload an Excel file (.xlsx or .xls) with AAFC roll data
+        1. Upload a CSV or Excel file with AAFC roll data
         2. Select the target date to process from the available dates in the file
-        3. The file should contain columns L-U with personnel names
+        3. The file should contain attendance columns (Staff, Flight 1, Flight 2, Zulu)
         4. Names should be in format: "RANK Surname (Firstname)" or "RANK Surname"
         5. The app will:
            - Filter records to only include the selected date
            - Extract and deduplicate all names
-           - Sort by Staff, Executives & Seniors, then others
+           - Sort by Staff, Executives & Seniors, then Flights
            - Within each group, sort by rank (highest first) then surname
            - Display statistics and section breakdowns
            - Allow download of formatted CSV
