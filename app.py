@@ -147,9 +147,8 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     section_counts = {}
     
     # Rename columns to match hardcoded order
-    # First column is Today's Date, remaining columns follow COLUMN_ORDER
-    available_cols = min(len(df.columns) - 1, len(COLUMN_ORDER))
-    new_columns = [df.columns[0]] + COLUMN_ORDER[:available_cols]
+    available_cols = min(len(df.columns), len(COLUMN_ORDER))
+    new_columns = COLUMN_ORDER[:available_cols]
     df.columns.values[:len(new_columns)] = new_columns
     
     # Preprocess "Not Listed" column: also split on commas by replacing with semicolons
@@ -159,9 +158,9 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
             lambda x: str(x).replace(',', ';') if pd.notna(x) else x
         )
     
-    # Process each row - extract from columns 1 onwards (skipping Today's Date at index 0)
+    # Process each row - extract from all columns
     for idx, row in df.iterrows():
-        extracted = extract_names_from_row(row, 1, len(row) - 1)
+        extracted = extract_names_from_row(row, 0, len(row) - 1)
         all_names.extend(extracted)
     
     # Remove duplicates while preserving source column info
@@ -262,8 +261,7 @@ def main():
             # Determine file type and read
             file_type = uploaded_file.name.split('.')[-1].lower()
             
-            # Columns to keep: Today's Date (index 6) + Attendance columns (indices 8-20)
-            # 6: Today's Date:
+            # Columns to keep: Attendance columns (indices 8-20)
             # 8: Staff
             # 9: Executive and Seniors
             # 10: 1 Flight
@@ -271,69 +269,20 @@ def main():
             # 15: 2 Flight
             # 16-19: 2 Alpha, 2 Bravo, 2 Charlie, 2 Delta
             # 20: Cadet Names Not Listed
-            columns_to_keep = [6] + list(range(8, 21))
+            columns_to_keep = list(range(8, 21))
             
             if file_type == 'csv':
                 df = pd.read_csv(uploaded_file, usecols=columns_to_keep)
             else:
                 df = pd.read_excel(uploaded_file, usecols=columns_to_keep)
             
-            # Standardize Today's Date to date only
-            if len(df.columns) > 0:
-                # First column should be Today's Date (the parade date)
-                date_col = df.columns[0]
-                if pd.api.types.is_datetime64_any_dtype(df[date_col]):
-                    df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
-                else:
-                    # Try to convert to datetime if not already
-                    try:
-                        df[date_col] = pd.to_datetime(df[date_col]).dt.normalize()
-                    except:
-                        pass  # If conversion fails, leave as is
-            
             st.success(f"File uploaded successfully! Found {len(df)} rows.")
             
-            # Extract unique dates from the dataframe
-            unique_dates = df[date_col].dropna().unique()
-            unique_dates = pd.to_datetime(unique_dates).date
-            unique_dates = sorted(unique_dates, reverse=True)  # Most recent first
-            
-            if len(unique_dates) == 0:
-                st.error("No valid dates found in the uploaded file.")
-                return
-            
-            # Date selector
-            st.markdown("---")
-            st.subheader("📅 Select Target Date")
-            
-            # Convert dates to datetime for the date_input widget
-            default_date = unique_dates[0]
-            
-            selected_date = st.date_input(
-                "Select the date to process",
-                value=default_date,
-                min_value=min(unique_dates),
-                max_value=max(unique_dates),
-                help="Only records matching this date will be processed"
-            )
-            
-            # Filter dataframe by selected date
-            df[date_col] = pd.to_datetime(df[date_col]).dt.date
-            df_filtered = df[df[date_col] == selected_date].copy()
-            
-            if len(df_filtered) == 0:
-                st.warning(f"No records found for the selected date: {selected_date}")
-                st.info(f"Available dates in file: {', '.join(str(d) for d in unique_dates)}")
-                return
-            
-            # Convert back to datetime for consistency
-            df_filtered[date_col] = pd.to_datetime(df_filtered[date_col])
-            
-            st.info(f"Processing {len(df_filtered)} record(s) from {selected_date}")
+            st.info(f"Processing {len(df)} record(s)")
             
             # Process the data
             with st.spinner("Processing rolls data..."):
-                output_df, stats = process_rolls_data(df_filtered)
+                output_df, stats = process_rolls_data(df)
             
             # Check for UNKNOWN records and display warning
             unknown_count = len(output_df[output_df['Rank'] == 'UNKNOWN'])
@@ -382,9 +331,8 @@ def main():
             output_df.to_csv(csv_buffer, index=False)
             csv_data = csv_buffer.getvalue()
             
-            # Generate filename based on selected date
-            date_str = selected_date.strftime("%Y%m%d")
-            csv_filename = f"{date_str} Formatted Rolls.csv"
+            # Generate filename
+            csv_filename = "Formatted Rolls.csv"
             
             st.download_button(
                 label="⬇️ Download Formatted CSV",
@@ -402,16 +350,14 @@ def main():
         st.info("""
         ### Instructions
         1. Upload a CSV or Excel file with AAFC roll data
-        2. Select the target date to process from the available dates in the file
-        3. The file should contain attendance columns:
+        2. The file should contain attendance columns:
            - Staff, Executive and Seniors
            - 1 Flight, 1 Alpha–Delta
            - 2 Flight, 2 Alpha–Delta
            - Cadet Names Not Listed
-        4. Names should be semicolon-separated in format: "RANK Firstname Surname"
-        5. The app will:
-           - Filter records to only include the selected date
-           - Extract and deduplicate all names
+        3. Names should be semicolon-separated in format: "RANK Firstname Surname"
+        4. The app will:
+           - Extract and deduplicate all names across all rows
            - Sort by Staff, Executives & Seniors, then Flights
            - Within each group, sort by rank (highest first) then surname
            - Display statistics and section breakdowns
