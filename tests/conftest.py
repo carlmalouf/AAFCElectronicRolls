@@ -13,12 +13,12 @@ def test_data_path():
 
 @pytest.fixture
 def test_df(test_data_path):
-    """Fixture to load test dataframe, keeping column C and columns K-U"""
+    """Fixture to load test dataframe, keeping Today's Date (col 6) and attendance columns (8-20)"""
     if not os.path.exists(test_data_path):
         pytest.skip(f"Test data file not found: {test_data_path}")
     
-    # Keep column C (index 2) and columns K-U (indices 10-20)
-    columns_to_keep = [2] + list(range(10, 21))
+    # Keep Today's Date (index 6) and attendance columns (indices 8-20)
+    columns_to_keep = [6] + list(range(8, 21))
     df = pd.read_excel(test_data_path, usecols=columns_to_keep)
     
     # Standardize date column to date only

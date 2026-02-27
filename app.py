@@ -17,11 +17,23 @@ STAFF_RANKS = ["SQNLDR", "FLTLT", "FLGOFF", "PLTOFF", "WOFF", "FSGT", "SGT", "CP
 
 # Hardcoded column order for updated input format
 COLUMN_ORDER = [
-    "Staff and Executive",
-    "1 Flight In Attendance",
-    "2 Flight In Attendance",
-    "Zulu Flight In Attendance"
+    "Staff",
+    "Executive and Seniors",
+    "1 Flight",
+    "1 Alpha",
+    "1 Bravo",
+    "1 Charlie",
+    "1 Delta",
+    "2 Flight",
+    "2 Alpha",
+    "2 Bravo",
+    "2 Charlie",
+    "2 Delta",
+    "Not Listed"
 ]
+
+FLIGHT1_COLUMNS = ["1 Flight", "1 Alpha", "1 Bravo", "1 Charlie", "1 Delta"]
+FLIGHT2_COLUMNS = ["2 Flight", "2 Alpha", "2 Bravo", "2 Charlie", "2 Delta"]
 
 def parse_name(name_str: str) -> Dict[str, str]:
     """
@@ -131,22 +143,23 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     Process the rolls data: extract names, sort them, and collect statistics.
     Returns (sorted_df, statistics_dict).
     """
-    # After import: Completion Time (index 0), then columns defined in COLUMN_ORDER
     all_names = []
     section_counts = {}
     
     # Rename columns to match hardcoded order
-    # First column is Completion Time, remaining columns follow COLUMN_ORDER
-    # We expect the input df to have the completion time + the data columns in order
+    # First column is Today's Date, remaining columns follow COLUMN_ORDER
     available_cols = min(len(df.columns) - 1, len(COLUMN_ORDER))
     new_columns = [df.columns[0]] + COLUMN_ORDER[:available_cols]
-    
-    # If df has more columns than we expected, keep their original names or drop them?
-    # The slicing [:available_cols] handles matching the count.
-    # We assign these names to the first N columns
     df.columns.values[:len(new_columns)] = new_columns
     
-    # Process each row - extract from columns 1 onwards (skipping Completion Time at index 0)
+    # Preprocess "Not Listed" column: also split on commas by replacing with semicolons
+    not_listed_col = "Not Listed"
+    if not_listed_col in df.columns:
+        df[not_listed_col] = df[not_listed_col].apply(
+            lambda x: str(x).replace(',', ';') if pd.notna(x) else x
+        )
+    
+    # Process each row - extract from columns 1 onwards (skipping Today's Date at index 0)
     for idx, row in df.iterrows():
         extracted = extract_names_from_row(row, 1, len(row) - 1)
         all_names.extend(extracted)
@@ -166,11 +179,9 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     # Convert counts to integers
     section_counts = {k: len(v) for k, v in section_counts.items()}
     
-    # Names of interest
-    staff_exec_col_name = "Staff and Executive"
-    flight1_col_name = "1 Flight In Attendance"
-    flight2_col_name = "2 Flight In Attendance"
-    zulu_col_name = "Zulu Flight In Attendance"
+    # Column name references
+    staff_col_name = "Staff"
+    exec_col_name = "Executive and Seniors"
 
     # Parsed lists
     staff_names = []
@@ -184,13 +195,11 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
             
         parsed['source_column'] = source_col
         
-        # Categorize
-        if source_col == staff_exec_col_name:
-            # Split into Staff and Executives based on rank
-            if parsed['rank'] in STAFF_RANKS:
-                staff_names.append(parsed)
-            else:
-                exec_senior_names.append(parsed)
+        # Categorize based on source column
+        if source_col == staff_col_name:
+            staff_names.append(parsed)
+        elif source_col == exec_col_name:
+            exec_senior_names.append(parsed)
         else:
             other_names.append(parsed)
     
@@ -199,7 +208,7 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     exec_senior_names.sort(key=lambda x: (get_rank_priority(x['rank'], False), x['surname']))
     other_names.sort(key=lambda x: (get_rank_priority(x['rank'], False), x['surname']))
     
-    # Combine all names in order: Staff -> Execs -> Flights (Others)
+    # Combine all names in order: Staff -> Execs -> Flights/Others
     sorted_names = staff_names + exec_senior_names + other_names
     
     # Create output dataframe
@@ -220,11 +229,11 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     cadet_count = len(exec_senior_names) + len(other_names)
     total_count = len(sorted_names)
     
-    # Calculate Flight totals from section_counts keys matches
-    flight1_count = section_counts.get(flight1_col_name, 0)
-    flight2_count = section_counts.get(flight2_col_name, 0)
-    zulu_count = section_counts.get(zulu_col_name, 0)
-    exec_count = len(exec_senior_names)  # Count of cadets in Staff column
+    # Calculate Flight totals by summing across sub-columns
+    flight1_count = sum(section_counts.get(col, 0) for col in FLIGHT1_COLUMNS)
+    flight2_count = sum(section_counts.get(col, 0) for col in FLIGHT2_COLUMNS)
+    exec_count = len(exec_senior_names)
+    not_listed_count = section_counts.get(not_listed_col, 0)
     
     statistics = {
         'staff_count': staff_count,
@@ -233,9 +242,10 @@ def process_rolls_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
         'section_counts': section_counts,
         'flight1_count': flight1_count,
         'flight2_count': flight2_count,
-        'zulu_count': zulu_count,
         'exec_count': exec_count,
-        'staff_col_name': staff_exec_col_name
+        'not_listed_count': not_listed_count,
+        'staff_col_name': staff_col_name,
+        'exec_col_name': exec_col_name
     }
     
     return output_df, statistics
@@ -252,13 +262,16 @@ def main():
             # Determine file type and read
             file_type = uploaded_file.name.split('.')[-1].lower()
             
-            # Columns to keep: Today's Date (index 6) + Attendance columns (indices 8-11)
-            # 6: Today's Date: (the actual parade date, not Completion time which is when the form was submitted)
-            # 8: Staff and Executive
-            # 9: 1 Flight In Attendance
-            # 10: 2 Flight In Attendance
-            # 11: Zulu Flight In Attendance
-            columns_to_keep = [6, 8, 9, 10, 11]
+            # Columns to keep: Today's Date (index 6) + Attendance columns (indices 8-20)
+            # 6: Today's Date:
+            # 8: Staff
+            # 9: Executive and Seniors
+            # 10: 1 Flight
+            # 11-14: 1 Alpha, 1 Bravo, 1 Charlie, 1 Delta
+            # 15: 2 Flight
+            # 16-19: 2 Alpha, 2 Bravo, 2 Charlie, 2 Delta
+            # 20: Cadet Names Not Listed
+            columns_to_keep = [6] + list(range(8, 21))
             
             if file_type == 'csv':
                 df = pd.read_csv(uploaded_file, usecols=columns_to_keep)
@@ -344,10 +357,8 @@ def main():
             st.markdown("### Staff & Leadership")
             col4, col5 = st.columns(2)
             with col4:
-                # Staff count is now from our parsed/categorized list, not just a column count
                 st.metric("👨‍✈️ Staff", stats['staff_count'])
             with col5:
-                # Executives are those with cadet ranks in the Staff/Executive column
                 st.metric("⭐ Executives & Seniors", stats.get('exec_count', 0))
             
             # Flight totals
@@ -358,10 +369,7 @@ def main():
             with col7:
                 st.metric("✈️ Flight 2", stats['flight2_count'])
             with col8:
-                st.metric("🎯 Zulu", stats.get('zulu_count', 0))
-            
-            # Display Zulu separately if it exists and wasn't already shown
-            # Not needed as we have a metric for it above
+                st.metric("📝 Not Listed", stats.get('not_listed_count', 0))
             
             # Display the processed data
             st.markdown("---")
@@ -395,8 +403,12 @@ def main():
         ### Instructions
         1. Upload a CSV or Excel file with AAFC roll data
         2. Select the target date to process from the available dates in the file
-        3. The file should contain attendance columns (Staff, Flight 1, Flight 2, Zulu)
-        4. Names should be in format: "RANK Surname (Firstname)" or "RANK Surname"
+        3. The file should contain attendance columns:
+           - Staff, Executive and Seniors
+           - 1 Flight, 1 Alpha–Delta
+           - 2 Flight, 2 Alpha–Delta
+           - Cadet Names Not Listed
+        4. Names should be semicolon-separated in format: "RANK Firstname Surname"
         5. The app will:
            - Filter records to only include the selected date
            - Extract and deduplicate all names
